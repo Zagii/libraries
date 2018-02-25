@@ -4,7 +4,15 @@ Library for Serial
 #ifndef KZGSerial_h
 #define KZGSerial_h
 
-#define KZGSerial_DEBUGFLAG
+//Not neccessary, but just in case. 
+#if ARDUINO > 22
+#include "Arduino.h"
+#else
+#include "WProgram.h"
+#endif
+#include "Stream.h"
+
+//#define KZGSerial_DEBUGFLAG
 
 /// MSG pattern
 // <abc;T;topic;msg>crc
@@ -14,8 +22,8 @@ Library for Serial
 // > -end of msg
 // crc8 chceck of all msg <..>
 ///// MAX_TOPIC_LENGTH + MAX_MSG_LENGTH < 250  !!
-#define MAX_TOPIC_LENGTH 20
-#define MAX_MSG_LENGTH 50
+#define MAX_TOPIC_LENGTH 100
+#define MAX_MSG_LENGTH 100
 
 #define KZGSerialMODE_PRZED		0
 #define KZGSerialMODE_START		1
@@ -30,18 +38,22 @@ class KZGSerial
 	private:
 		
 		void deb(char *);
+		void deb(char );
+		void deb(int );
 		uint8_t _mode;
 		Stream *_serial;
 		uint8_t _index;
 		uint8_t _allLen;
+		uint8_t _crcint;
 		char _type;
 		char _topic[MAX_TOPIC_LENGTH];
 		char _msg[MAX_MSG_LENGTH];
 		bool _isMsgWaiting;
-		void resetData();
-		bool checkCRC(int crc);
-		uint8_t calcCRC();
-		uint8_t crc8(const uint8_t *addr, uint8_t len);
+		
+		bool checkCRC(char crc);
+		bool checkCRC(uint8_t crc);
+		char calcCRC();
+		char crc8(const char *addr, uint8_t len);
 		void createMsg(char* buf,char t, char* top,char* msg);
 	public:
 		KZGSerial();
@@ -52,6 +64,7 @@ class KZGSerial
 		char getMsgType(); 
 		char* getMsgTopic();
 		char* getMsgValue();
+		void resetData();
 		
 };
 

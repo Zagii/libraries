@@ -11,6 +11,18 @@ void KZGSerial::deb(char* str)
 		Serial.println(str);
 	#endif
 }
+void KZGSerial::deb(char c)
+{
+	#ifdef KZGSerial_DEBUGFLAG
+		Serial.println(c);
+	#endif
+}
+void KZGSerial::deb(int c)
+{
+	#ifdef KZGSerial_DEBUGFLAG
+		Serial.println(c);
+	#endif
+}
 
 KZGSerial::KZGSerial()
 {
@@ -24,10 +36,11 @@ void KZGSerial::begin(Stream *theStream)
 void KZGSerial::resetData()
 {
 	_type='\0';
-	stpcpy(_topic,"");
-	stpcpy(_msg,"");
+	strcpy(_topic,"");
+	strcpy(_msg,"");
 	_index=0;
 	_allLen=0;
+	_crcint=0;
 	_isMsgWaiting=false;
 	_mode=KZGSerialMODE_PRZED;
 	deb("resetData");
@@ -37,11 +50,14 @@ void KZGSerial::loop()
 	if(_serial->available()>0)
 	{
 		char c=_serial->read();
+		Serial.print("_index=");Serial.print(_index);
+		Serial.print(", nowy znak=");Serial.println(c);
 		if(c=='<') 
 		{
 			resetData();
 			_mode=KZGSerialMODE_START;
 			deb("Loop - Bledny znak poczatku");
+			
 			return;
 		}
 		_index++;
@@ -55,6 +71,7 @@ void KZGSerial::loop()
 		{
 			case KZGSerialMODE_PRZED:
 				deb("Loop - KZGSerialMODE_PRZED nieistotne znaki");
+				deb(c);
 			break;
 			case KZGSerialMODE_START:
 				if(c==';')
@@ -63,6 +80,7 @@ void KZGSerial::loop()
 				}
 				else
 				{
+					Serial.println("modeStart");
 					if(!isDigit(c)||_index>3)
 					{
 						resetData();
@@ -70,8 +88,10 @@ void KZGSerial::loop()
 						return;
 					}else
 					{
-						int n=atoi((const char*)c);
-						_allLen=_allLen+10+n;
+						uint8_t n=(int)c-'0';
+						_allLen=_allLen*10+n;
+						deb("znak len, _allLen=");
+						deb(_allLen);
 					}
 				}
 			break;
@@ -79,10 +99,11 @@ void KZGSerial::loop()
 				if(c==';'&&_type!='\0')
 				{
 					_mode=KZGSerialMODE_TOPIC;
+					deb("topicMODE");
 				}
 				else
 				{
-					if(!isAlphaNumeric(c)||_index>5||_index>_allLen||_type=='\0')
+					if(!isPrintable(c)||_index>5||_index>_allLen)
 					{
 						deb("Loop - KZGSerialMODE_TYPE - błąd odczytu typu");
 						resetData();
@@ -90,6 +111,8 @@ void KZGSerial::loop()
 					}else
 					{
 						_type=c;
+						deb("_type");
+						deb(_type);
 					}
 				}
 			break;
@@ -97,40 +120,55 @@ void KZGSerial::loop()
 				if(c==';')
 				{
 					_mode=KZGSerialMODE_TRESC;
+					deb("_topic=");deb(_topic);
+					deb("trescMode");
 				}
 				else
 				{
-					if(!isAlphaNumeric(c)||_index>_allLen)
+					if(!isPrintable(c)||_index>_allLen)
 					{
 						deb("Loop - KZGSerialMODE_TOPIC - blad odczytu topicu");
+						
+						deb("index, allLen");
+						deb(_index);
+						deb(_allLen);
 						resetData();
 						return;
 					}else
 					{
-						strcat(_topic,(const char*)c);
+						int len = strlen(_topic);
+						_topic[len] = c;
+						_topic[len+1] = '\0';
 					}
 				}
 			break;
 			case KZGSerialMODE_TRESC:
-				if(c==';')
-				{
-					_mode=KZGSerialMODE_KONIEC;
-				}
-				else
-				{
-					if(!isAlphaNumeric(c)||_index>_allLen)
+				
+					if(!isPrintable(c)||_index>_allLen)
 					{
 						deb("Loop - KZGSerialMODE_TRESC - blad odczytu treści");
+						
+						deb("index, allLen");
+						deb(_index);
+						deb(_allLen);
 						resetData();
 						return;
 					}else
 					{
-						strcat(_msg,(const char*)c);
+						int len = strlen(_msg);
+						_msg[len] = c;
+						_msg[len+1] = '\0';
+						if(_index==_allLen)
+						{		
+							_mode=KZGSerialMODE_KONIEC;
+							deb("_msg=");deb(_msg);
+							deb("koniecMode");
+						}
 					}
-				}
+				
 			break;
 			case KZGSerialMODE_KONIEC:
-				if(c=='>'&&_index==_allLen)
+				if(c=='>'&&_index==_allLen+1)
 				{
 					_mode=KZGSerialMODE_CRC;
 				}
@@ -141,33 +179,56 @@ void KZGSerial::loop()
 				}
 			break;
 			case KZGSerialMODE_CRC:
-				if(checkCRC(atoi((const char*)c)))
+				if(_index-_allLen<5)
 				{
-					_isMsgWaiting=true;
+						uint8_t n=(int)c-'0';
+						_crcint=_crcint*10+n;
+						deb("CRC ");
+						deb(_crcint);
+						if(_index-_allLen==4)
+						{
+							if(checkCRC(_crcint))
+							{
+								_isMsgWaiting=true;
+							}
+							else
+							{
+								deb("Loop - KZGSerialMODE_CRC - blad CRC");
+							}
+						_mode=KZGSerialMODE_PRZED;
+						}
 				}
-				else
-				{
-					deb("Loop - KZGSerialMODE_CRC - blad CRC");
-				}
-				_mode=KZGSerialMODE_PRZED;
+				
+				
 			break;
 		}
 	}
 }
 
-bool KZGSerial::checkCRC(int crc)
+bool KZGSerial::checkCRC(char crc)
 {
-	if(calcCRC()==crc) return true; else return false;
+	deb("checkCRC ");
+	char c1=calcCRC();
+	deb(c1);deb(crc);
+	if(c1==crc) return true; else return false;
+}
+bool KZGSerial::checkCRC(uint8_t crc)
+{
+	deb("checkCRC ");
+	uint8_t c1=(int)calcCRC();
+	deb(c1);deb(crc);
+	if(c1==crc) return true; else return false;
 }
 void KZGSerial::printRS(char type, char* topic, char* msg)
 {
 	char str[MAX_TOPIC_LENGTH + MAX_MSG_LENGTH];
 	createMsg(str,type,topic,msg);
-	char crc= crc8(str,strlen(str));	  
-	strcat(str,crc);
-	deb("printRS")
+	uint8_t crc= (uint8_t) crc8(str,strlen(str));
+sprintf(str,"%s%03d",str,crc);	
+	//strcat(str,(const char *)crc);
+	deb("printRS");
 	deb(str);
-	_serial.println(str);
+	_serial->println(str);
 }
 bool KZGSerial::isMsgWaiting()
 {
@@ -187,16 +248,14 @@ char* KZGSerial::getMsgValue()
 }
 void KZGSerial::createMsg(char* buf,char t, char* top,char* msg)
 {
-	strcpy(buf,'<');
-	uint8_t n=strlen(top)+strlen(msg)+3; //+;+;+;
-	strcat(buf,itoa(n));
-	strcat(buf,';');
-	strcat(buf,(const char*)t);
-	strcat(buf,';');
-	strcat(buf,top);
-	strcat(buf,';');
-	strcat(buf,msg);
-	strcat(buf,'>');
+	
+	uint8_t n=strlen(top)+strlen(msg)+3; //ddd;+;+;+;
+	char tmp[5];
+	sprintf(buf,";%c;%s;%s",t,top,msg);
+	n=strlen(buf);
+	int d=2;
+	if(n>=100)d=3;else if(n<10)d=1; 
+	sprintf(buf,"<%d;%c;%s;%s>",n+d,t,top,msg);
 	deb("createMsg");
 	deb(buf);
 }
@@ -205,7 +264,8 @@ char KZGSerial::calcCRC()
 	char str[MAX_TOPIC_LENGTH + MAX_MSG_LENGTH];
 	createMsg(str,_type,_topic,_msg);
 	char crc= crc8(str,strlen(str));	   
-	Serial.print("calcCRC ");Serial.print(str);Serial.println(crc);
+	Serial.print("calcCRC ");Serial.print(str);Serial.println(crc);Serial.print("crc int=");Serial.println((int)crc);
+	return crc;
 }
 
 // This table comes from Dallas sample code where it is freely reusable,
