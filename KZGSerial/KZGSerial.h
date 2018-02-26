@@ -12,7 +12,7 @@ Library for Serial
 #endif
 #include "Stream.h"
 
-//#define KZGSerial_DEBUGFLAG
+#define KZGSerial_DEBUGFLAG
 
 /// MSG pattern
 // <abc;T;topic;msg>crc

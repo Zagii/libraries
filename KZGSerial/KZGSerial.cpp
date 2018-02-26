@@ -50,8 +50,8 @@ void KZGSerial::loop()
 	if(_serial->available()>0)
 	{
 		char c=_serial->read();
-		Serial.print("_index=");Serial.print(_index);
-		Serial.print(", nowy znak=");Serial.println(c);
+//Serial.print("_index=");Serial.print(_index);
+	//	Serial.print(", nowy znak=");Serial.println(c);
 		if(c=='<') 
 		{
 			resetData();
@@ -80,7 +80,7 @@ void KZGSerial::loop()
 				}
 				else
 				{
-					Serial.println("modeStart");
+					deb("modeStart");
 					if(!isDigit(c)||_index>3)
 					{
 						resetData();
@@ -264,7 +264,7 @@ char KZGSerial::calcCRC()
 	char str[MAX_TOPIC_LENGTH + MAX_MSG_LENGTH];
 	createMsg(str,_type,_topic,_msg);
 	char crc= crc8(str,strlen(str));	   
-	Serial.print("calcCRC ");Serial.print(str);Serial.println(crc);Serial.print("crc int=");Serial.println((int)crc);
+	deb("calcCRC ");deb(str);deb(crc);deb("crc int=");deb((int)crc);
 	return crc;
 }
 
